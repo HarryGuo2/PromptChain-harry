@@ -13,6 +13,7 @@ import {
 interface FlavorOption {
   id: number
   slug: string
+  stepCount: number
 }
 
 interface TestRunnerFormProps {
@@ -40,6 +41,9 @@ export function TestRunnerForm({ flavors }: TestRunnerFormProps) {
   const [uploadedCdnUrl, setUploadedCdnUrl] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  const selectedFlavor =
+    selectedFlavorId === '' ? null : flavors.find((flavor) => String(flavor.id) === selectedFlavorId) || null
+
   const onRun = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setErrorMessage(null)
@@ -50,6 +54,13 @@ export function TestRunnerForm({ flavors }: TestRunnerFormProps) {
 
     if (!selectedFile) {
       setErrorMessage('Choose an image file first.')
+      return
+    }
+
+    if (selectedFlavor && selectedFlavor.stepCount < 1) {
+      setErrorMessage(
+        `Flavor #${selectedFlavor.id} (${selectedFlavor.slug}) has no steps. Add steps in Flavor Builder before testing.`
+      )
       return
     }
 
@@ -115,11 +126,17 @@ export function TestRunnerForm({ flavors }: TestRunnerFormProps) {
           >
             <option value="">Use API default behavior</option>
             {flavors.map((flavor) => (
-              <option key={flavor.id} value={flavor.id}>
+              <option key={flavor.id} value={flavor.id} disabled={flavor.stepCount < 1}>
                 #{flavor.id} - {flavor.slug}
+                {flavor.stepCount < 1 ? ' (no steps)' : ` (${flavor.stepCount} steps)`}
               </option>
             ))}
           </select>
+          {selectedFlavor && selectedFlavor.stepCount < 1 ? (
+            <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+              This flavor has no steps and cannot be tested yet.
+            </p>
+          ) : null}
         </div>
 
         <div>

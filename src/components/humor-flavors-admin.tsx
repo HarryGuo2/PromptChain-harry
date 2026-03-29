@@ -97,6 +97,7 @@ export function HumorFlavorsAdmin({
   const [steps, setSteps] = useState<StepRow[]>(initialSteps)
   const [selectedFlavorId, setSelectedFlavorId] = useState<number | null>(initialFlavors[0]?.id ?? null)
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null)
+  const [flavorSearch, setFlavorSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -120,6 +121,14 @@ export function HumorFlavorsAdmin({
     .filter((step) => step.humor_flavor_id === selectedFlavorId)
     .sort((a, b) => a.order_by - b.order_by)
   const selectedFlavor = flavors.find((item) => item.id === selectedFlavorId) ?? null
+  const normalizedFlavorSearch = flavorSearch.trim().toLowerCase()
+  const filteredFlavors = normalizedFlavorSearch
+    ? flavors.filter(
+        (flavor) =>
+          flavor.slug.toLowerCase().includes(normalizedFlavorSearch) ||
+          String(flavor.id).includes(normalizedFlavorSearch)
+      )
+    : flavors
 
   const refreshData = async () => {
     const [flavorsResult, stepsResult] = await Promise.all([
@@ -238,6 +247,9 @@ export function HumorFlavorsAdmin({
         <p className="text-sm text-slate-600 dark:text-slate-300">
           Create a flavor, then select it to manage step prompts and order.
         </p>
+        <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+          1) Create or select a flavor. 2) Edit selected flavor details. 3) Create/edit/reorder steps below.
+        </div>
         <div className="grid gap-2 md:grid-cols-2">
           <input
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
@@ -278,29 +290,44 @@ export function HumorFlavorsAdmin({
         </button>
 
         <div className="space-y-2">
-          <h3 className="font-medium">Existing flavors</h3>
+          <h3 className="font-medium">Select flavor to edit</h3>
           {flavors.length === 0 ? (
             <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
               No humor flavors yet. Create your first flavor above.
             </div>
           ) : null}
-          {flavors.map((flavor) => (
-            <button
-              key={flavor.id}
-              className={`w-full rounded-md border px-3 py-2 text-left text-sm ${
-                selectedFlavorId === flavor.id
-                  ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950'
-                  : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
-              }`}
-              onClick={() => {
-                setSelectedFlavorId(flavor.id)
-                setSelectedStepId(null)
-              }}
-              disabled={loading}
-            >
-              #{flavor.id} - {flavor.slug}
-            </button>
-          ))}
+          {flavors.length > 0 ? (
+            <>
+              <input
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 w-full"
+                placeholder="Search flavors by id or slug"
+                value={flavorSearch}
+                onChange={(event) => setFlavorSearch(event.target.value)}
+              />
+              <select
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 w-full"
+                value={selectedFlavorId ?? ''}
+                onChange={(event) => {
+                  const nextId = Number(event.target.value)
+                  setSelectedFlavorId(Number.isNaN(nextId) ? null : nextId)
+                  setSelectedStepId(null)
+                }}
+                disabled={loading}
+              >
+                {filteredFlavors.length === 0 ? (
+                  <option value="">No matching flavors</option>
+                ) : null}
+                {filteredFlavors.map((flavor) => (
+                  <option key={flavor.id} value={flavor.id}>
+                    #{flavor.id} - {flavor.slug}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Showing {filteredFlavors.length} of {flavors.length} flavors
+              </p>
+            </>
+          ) : null}
         </div>
 
         {selectedFlavor ? (

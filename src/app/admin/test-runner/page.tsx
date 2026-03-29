@@ -9,6 +9,21 @@ export default async function TestRunnerPage() {
     .select('id, slug')
     .order('slug', { ascending: true })
 
+  const { data: flavorSteps } = await supabase
+    .from('humor_flavor_steps')
+    .select('humor_flavor_id')
+
+  const flavorStepCountByFlavorId = (flavorSteps || []).reduce<Record<number, number>>((acc, row) => {
+    const flavorId = Number(row.humor_flavor_id)
+    acc[flavorId] = (acc[flavorId] || 0) + 1
+    return acc
+  }, {})
+
+  const flavorsWithStepCounts = (flavors || []).map((flavor) => ({
+    ...flavor,
+    stepCount: flavorStepCountByFlavorId[Number(flavor.id)] || 0,
+  }))
+
   return (
     <main className="container space-y-4">
       <div className="card">
@@ -28,7 +43,7 @@ export default async function TestRunnerPage() {
         </ul>
       </div>
 
-      <TestRunnerForm flavors={flavors || []} />
+      <TestRunnerForm flavors={flavorsWithStepCounts} />
     </main>
   )
 }
