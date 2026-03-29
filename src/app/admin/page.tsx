@@ -15,9 +15,9 @@ export default async function AdminHomePage() {
       <div className="card">
         <h2 className="text-lg font-semibold">Core Routes</h2>
         <ul className="mt-3 list-disc list-inside text-slate-700">
-          <li><a href="/admin/humor-flavors" className="underline">Humor Flavors + Steps</a></li>
-          <li><a href="/admin/test-runner" className="underline">Test Runner (REST API)</a></li>
-          <li><a href="/admin/captions" className="underline">Generated Captions</a></li>
+          <li><a href="/admin/humor-flavors" className="underline">Flavor Builder</a></li>
+          <li><a href="/admin/test-runner" className="underline">Run Pipeline Test</a></li>
+          <li><a href="/admin/captions" className="underline">Caption History</a></li>
         </ul>
       </div>
     </main>

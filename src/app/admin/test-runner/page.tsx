@@ -12,10 +12,9 @@ export default async function TestRunnerPage() {
   return (
     <main className="container space-y-4">
       <div className="card">
-        <h1 className="text-2xl font-bold">Prompt Chain Test Runner</h1>
+        <h1 className="text-2xl font-bold">Run Pipeline Test</h1>
         <p className="text-slate-600 mt-1">
-          Upload an image, optionally select a humor flavor, then run the 4-step caption
-          pipeline API flow.
+          Upload a test image, optionally pick a flavor, and execute the full caption pipeline.
         </p>
       </div>
 

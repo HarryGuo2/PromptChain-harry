@@ -101,7 +101,7 @@ export function TestRunnerForm({ flavors }: TestRunnerFormProps) {
 
   return (
     <div className="card space-y-4">
-      <h2 className="text-lg font-semibold">Run caption pipeline</h2>
+      <h2 className="text-lg font-semibold">Test Controls</h2>
       <form className="space-y-4" onSubmit={onRun}>
         <div>
           <label className="block text-sm mb-1" htmlFor="flavor-id">

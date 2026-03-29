@@ -68,9 +68,9 @@ export default async function CaptionsPage({ searchParams }: { searchParams?: Se
   return (
     <main className="container space-y-4">
       <div className="card">
-        <h1 className="text-2xl font-bold">Generated Captions</h1>
+        <h1 className="text-2xl font-bold">Caption History</h1>
         <p className="text-slate-600 mt-1">
-          Filter by humor flavor and page through generated captions.
+          Browse saved caption results, filter by flavor, and page through history.
         </p>
       </div>
       <div className="card">

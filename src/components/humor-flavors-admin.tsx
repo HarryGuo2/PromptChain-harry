@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
 interface FlavorRow {
@@ -96,10 +96,12 @@ export function HumorFlavorsAdmin({
   const [flavors, setFlavors] = useState<FlavorRow[]>(initialFlavors)
   const [steps, setSteps] = useState<StepRow[]>(initialSteps)
   const [selectedFlavorId, setSelectedFlavorId] = useState<number | null>(initialFlavors[0]?.id ?? null)
+  const [selectedStepId, setSelectedStepId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [newFlavor, setNewFlavor] = useState<FlavorFormState>(emptyFlavorForm)
+  const [editingFlavor, setEditingFlavor] = useState<FlavorFormState>(emptyFlavorForm)
   const [newStep, setNewStep] = useState<StepFormState>({
     id: '',
     order_by: '',
@@ -112,12 +114,12 @@ export function HumorFlavorsAdmin({
     llm_system_prompt: '',
     llm_user_prompt: '',
   })
-  const [flavorDrafts, setFlavorDrafts] = useState<Record<string, FlavorFormState>>({})
-  const [stepDrafts, setStepDrafts] = useState<Record<string, StepFormState>>({})
+  const [editingStep, setEditingStep] = useState<StepFormState | null>(null)
 
   const selectedFlavorSteps = steps
     .filter((step) => step.humor_flavor_id === selectedFlavorId)
     .sort((a, b) => a.order_by - b.order_by)
+  const selectedFlavor = flavors.find((item) => item.id === selectedFlavorId) ?? null
 
   const refreshData = async () => {
     const [flavorsResult, stepsResult] = await Promise.all([
@@ -144,6 +146,7 @@ export function HumorFlavorsAdmin({
 
     if (!nextFlavors.find((item) => item.id === selectedFlavorId)) {
       setSelectedFlavorId(nextFlavors[0]?.id ?? null)
+      setSelectedStepId(null)
     }
   }
 
@@ -161,15 +164,6 @@ export function HumorFlavorsAdmin({
       setLoading(false)
     }
   }
-
-  const getFlavorDraft = (flavor: FlavorRow): FlavorFormState =>
-    flavorDrafts[String(flavor.id)] ?? {
-      id: String(flavor.id),
-      slug: flavor.slug,
-      description: flavor.description ?? '',
-    }
-
-  const getStepDraft = (step: StepRow): StepFormState => stepDrafts[String(step.id)] ?? toStepForm(step)
 
   const upsertStepFromForm = async (stepId: number, form: StepFormState) => {
     const payload = {
@@ -215,6 +209,27 @@ export function HumorFlavorsAdmin({
       .eq('id', stepId)
     if (moveCurrentToTarget.error) throw new Error(moveCurrentToTarget.error.message)
   }
+
+  useEffect(() => {
+    if (!selectedFlavor) {
+      setEditingFlavor(emptyFlavorForm)
+      return
+    }
+    setEditingFlavor({
+      id: String(selectedFlavor.id),
+      slug: selectedFlavor.slug,
+      description: selectedFlavor.description ?? '',
+    })
+  }, [selectedFlavor?.id, selectedFlavor?.slug, selectedFlavor?.description])
+
+  useEffect(() => {
+    if (!selectedStepId) {
+      setEditingStep(null)
+      return
+    }
+    const step = steps.find((item) => item.id === selectedStepId) ?? null
+    setEditingStep(step ? toStepForm(step) : null)
+  }, [selectedStepId, steps])
 
   return (
     <div className="space-y-4">
@@ -262,78 +277,83 @@ export function HumorFlavorsAdmin({
           Create flavor
         </button>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
+          <h3 className="font-medium">Existing flavors</h3>
           {flavors.length === 0 ? (
             <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
               No humor flavors yet. Create your first flavor above.
             </div>
           ) : null}
-          {flavors.map((flavor) => {
-            const draft = getFlavorDraft(flavor)
-            return (
-              <div key={flavor.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
-                <div className="mb-2 text-sm font-medium">Flavor #{flavor.id}</div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <input
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                    value={draft.slug}
-                    onChange={(event) =>
-                      setFlavorDrafts((current) => ({
-                        ...current,
-                        [String(flavor.id)]: { ...draft, slug: event.target.value },
-                      }))
-                    }
-                  />
-                  <button className="btn" disabled={loading} onClick={() => setSelectedFlavorId(flavor.id)}>
-                    Manage steps
-                  </button>
-                </div>
-                <textarea
-                  className="mt-2 w-full min-h-20 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                  value={draft.description}
-                  onChange={(event) =>
-                    setFlavorDrafts((current) => ({
-                      ...current,
-                      [String(flavor.id)]: { ...draft, description: event.target.value },
-                    }))
-                  }
-                />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    className="btn btn-primary"
-                    disabled={loading || draft.slug.trim() === ''}
-                    onClick={() =>
-                      runMutation(async () => {
-                        const result = await supabase
-                          .from('humor_flavors')
-                          .update({
-                            slug: draft.slug.trim(),
-                            description: draft.description.trim() === '' ? null : draft.description.trim(),
-                          })
-                          .eq('id', flavor.id)
-                        if (result.error) throw new Error(result.error.message)
-                      }, `Updated flavor #${flavor.id}.`)
-                    }
-                  >
-                    Save flavor
-                  </button>
-                  <button
-                    className="btn"
-                    disabled={loading}
-                    onClick={() =>
-                      runMutation(async () => {
-                        const result = await supabase.from('humor_flavors').delete().eq('id', flavor.id)
-                        if (result.error) throw new Error(result.error.message)
-                      }, `Deleted flavor #${flavor.id}.`)
-                    }
-                  >
-                    Delete flavor
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+          {flavors.map((flavor) => (
+            <button
+              key={flavor.id}
+              className={`w-full rounded-md border px-3 py-2 text-left text-sm ${
+                selectedFlavorId === flavor.id
+                  ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950'
+                  : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+              }`}
+              onClick={() => {
+                setSelectedFlavorId(flavor.id)
+                setSelectedStepId(null)
+              }}
+              disabled={loading}
+            >
+              #{flavor.id} - {flavor.slug}
+            </button>
+          ))}
         </div>
+
+        {selectedFlavor ? (
+          <div className="rounded-md border border-slate-200 p-3 dark:border-slate-700 space-y-2">
+            <h3 className="font-medium">Edit selected flavor #{selectedFlavor.id}</h3>
+            <input
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 w-full"
+              value={editingFlavor.slug}
+              onChange={(event) => setEditingFlavor((current) => ({ ...current, slug: event.target.value }))}
+            />
+            <textarea
+              className="w-full min-h-20 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+              value={editingFlavor.description}
+              onChange={(event) =>
+                setEditingFlavor((current) => ({ ...current, description: event.target.value }))
+              }
+            />
+            <div className="flex gap-2">
+              <button
+                className="btn btn-primary"
+                disabled={loading || editingFlavor.slug.trim() === ''}
+                onClick={() =>
+                  runMutation(async () => {
+                    const result = await supabase
+                      .from('humor_flavors')
+                      .update({
+                        slug: editingFlavor.slug.trim(),
+                        description:
+                          editingFlavor.description.trim() === '' ? null : editingFlavor.description.trim(),
+                      })
+                      .eq('id', selectedFlavor.id)
+                    if (result.error) throw new Error(result.error.message)
+                  }, `Updated flavor #${selectedFlavor.id}.`)
+                }
+              >
+                Save selected flavor
+              </button>
+              <button
+                className="btn"
+                disabled={loading}
+                onClick={() =>
+                  runMutation(async () => {
+                    const result = await supabase.from('humor_flavors').delete().eq('id', selectedFlavor.id)
+                    if (result.error) throw new Error(result.error.message)
+                    setSelectedStepId(null)
+                  }, `Deleted flavor #${selectedFlavor.id}.`)
+                }
+              >
+                Delete selected flavor
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="card space-y-3">
@@ -495,183 +515,183 @@ export function HumorFlavorsAdmin({
               No steps yet for this flavor. Create one above.
             </div>
           ) : null}
-          {selectedFlavorSteps.map((step, index) => {
-            const draft = getStepDraft(step)
-            return (
-              <div key={step.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
-                <div className="mb-2 text-sm font-medium">
-                  Step #{step.id} - order {step.order_by}
-                </div>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <input
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                    value={draft.order_by}
-                    onChange={(event) =>
-                      setStepDrafts((current) => ({
-                        ...current,
-                        [String(step.id)]: { ...draft, order_by: event.target.value },
-                      }))
-                    }
-                  />
-                  <input
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                    placeholder="Temperature"
-                    value={draft.llm_temperature}
-                    onChange={(event) =>
-                      setStepDrafts((current) => ({
-                        ...current,
-                        [String(step.id)]: { ...draft, llm_temperature: event.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <div className="mt-2 grid gap-2 md:grid-cols-2">
-                  <select
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                    value={draft.llm_model_id}
-                    onChange={(event) =>
-                      setStepDrafts((current) => ({
-                        ...current,
-                        [String(step.id)]: { ...draft, llm_model_id: event.target.value },
-                      }))
-                    }
-                  >
-                    {llmModels.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.id} - {item.name || item.provider_model_id || 'unnamed model'}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                    value={draft.humor_flavor_step_type_id}
-                    onChange={(event) =>
-                      setStepDrafts((current) => ({
-                        ...current,
-                        [String(step.id)]: { ...draft, humor_flavor_step_type_id: event.target.value },
-                      }))
-                    }
-                  >
-                    {stepTypes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.id} - {item.slug || item.description || 'step type'}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                    value={draft.llm_input_type_id}
-                    onChange={(event) =>
-                      setStepDrafts((current) => ({
-                        ...current,
-                        [String(step.id)]: { ...draft, llm_input_type_id: event.target.value },
-                      }))
-                    }
-                  >
-                    {llmInputTypes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.id} - {item.slug || item.description || 'input type'}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                    value={draft.llm_output_type_id}
-                    onChange={(event) =>
-                      setStepDrafts((current) => ({
-                        ...current,
-                        [String(step.id)]: { ...draft, llm_output_type_id: event.target.value },
-                      }))
-                    }
-                  >
-                    {llmOutputTypes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.id} - {item.slug || item.description || 'output type'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <textarea
-                  className="mt-2 w-full min-h-16 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                  value={draft.description}
-                  onChange={(event) =>
-                    setStepDrafts((current) => ({
-                      ...current,
-                      [String(step.id)]: { ...draft, description: event.target.value },
-                    }))
-                  }
-                />
-                <textarea
-                  className="mt-2 w-full min-h-24 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                  value={draft.llm_system_prompt}
-                  onChange={(event) =>
-                    setStepDrafts((current) => ({
-                      ...current,
-                      [String(step.id)]: { ...draft, llm_system_prompt: event.target.value },
-                    }))
-                  }
-                />
-                <textarea
-                  className="mt-2 w-full min-h-24 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-                  value={draft.llm_user_prompt}
-                  onChange={(event) =>
-                    setStepDrafts((current) => ({
-                      ...current,
-                      [String(step.id)]: { ...draft, llm_user_prompt: event.target.value },
-                    }))
-                  }
-                />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    className="btn btn-primary"
-                    disabled={loading}
-                    onClick={() =>
-                      runMutation(async () => {
-                        await upsertStepFromForm(step.id, draft)
-                      }, `Updated step #${step.id}.`)
-                    }
-                  >
-                    Save step
-                  </button>
-                  <button
-                    className="btn"
-                    disabled={loading}
-                    onClick={() =>
-                      runMutation(async () => {
-                        const result = await supabase.from('humor_flavor_steps').delete().eq('id', step.id)
-                        if (result.error) throw new Error(result.error.message)
-                      }, `Deleted step #${step.id}.`)
-                    }
-                  >
-                    Delete step
-                  </button>
-                  <button
-                    className="btn"
-                    disabled={loading || index === 0}
-                    onClick={() =>
-                      runMutation(async () => {
-                        await updateStepOrder(step.id, step.order_by - 1)
-                      }, `Moved step #${step.id} up.`)
-                    }
-                  >
-                    Move up
-                  </button>
-                  <button
-                    className="btn"
-                    disabled={loading || index === selectedFlavorSteps.length - 1}
-                    onClick={() =>
-                      runMutation(async () => {
-                        await updateStepOrder(step.id, step.order_by + 1)
-                      }, `Moved step #${step.id} down.`)
-                    }
-                  >
-                    Move down
-                  </button>
-                </div>
+          {selectedFlavorSteps.map((step, index) => (
+            <div key={step.id} className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
+              <div className="mb-2 text-sm font-medium">
+                Step #{step.id} - order {step.order_by}
               </div>
-            )
-          })}
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                {step.description?.trim() || '(No step description)'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button className="btn" disabled={loading} onClick={() => setSelectedStepId(step.id)}>
+                  Edit step
+                </button>
+                <button
+                  className="btn"
+                  disabled={loading}
+                  onClick={() =>
+                    runMutation(async () => {
+                      const result = await supabase.from('humor_flavor_steps').delete().eq('id', step.id)
+                      if (result.error) throw new Error(result.error.message)
+                      if (selectedStepId === step.id) setSelectedStepId(null)
+                    }, `Deleted step #${step.id}.`)
+                  }
+                >
+                  Delete step
+                </button>
+                <button
+                  className="btn"
+                  disabled={loading || index === 0}
+                  onClick={() =>
+                    runMutation(async () => {
+                      await updateStepOrder(step.id, step.order_by - 1)
+                    }, `Moved step #${step.id} up.`)
+                  }
+                >
+                  Move up
+                </button>
+                <button
+                  className="btn"
+                  disabled={loading || index === selectedFlavorSteps.length - 1}
+                  onClick={() =>
+                    runMutation(async () => {
+                      await updateStepOrder(step.id, step.order_by + 1)
+                    }, `Moved step #${step.id} down.`)
+                  }
+                >
+                  Move down
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
+
+        {editingStep ? (
+          <div className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
+            <h3 className="mb-2 font-medium">Edit selected step #{editingStep.id}</h3>
+            <div className="grid gap-2 md:grid-cols-3">
+              <input
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                value={editingStep.order_by}
+                onChange={(event) =>
+                  setEditingStep((current) => (current ? { ...current, order_by: event.target.value } : null))
+                }
+              />
+              <input
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                placeholder="Temperature"
+                value={editingStep.llm_temperature}
+                onChange={(event) =>
+                  setEditingStep((current) =>
+                    current ? { ...current, llm_temperature: event.target.value } : null
+                  )
+                }
+              />
+            </div>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <select
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                value={editingStep.llm_model_id}
+                onChange={(event) =>
+                  setEditingStep((current) =>
+                    current ? { ...current, llm_model_id: event.target.value } : null
+                  )
+                }
+              >
+                {llmModels.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.id} - {item.name || item.provider_model_id || 'unnamed model'}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                value={editingStep.humor_flavor_step_type_id}
+                onChange={(event) =>
+                  setEditingStep((current) =>
+                    current ? { ...current, humor_flavor_step_type_id: event.target.value } : null
+                  )
+                }
+              >
+                {stepTypes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.id} - {item.slug || item.description || 'step type'}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                value={editingStep.llm_input_type_id}
+                onChange={(event) =>
+                  setEditingStep((current) =>
+                    current ? { ...current, llm_input_type_id: event.target.value } : null
+                  )
+                }
+              >
+                {llmInputTypes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.id} - {item.slug || item.description || 'input type'}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                value={editingStep.llm_output_type_id}
+                onChange={(event) =>
+                  setEditingStep((current) =>
+                    current ? { ...current, llm_output_type_id: event.target.value } : null
+                  )
+                }
+              >
+                {llmOutputTypes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.id} - {item.slug || item.description || 'output type'}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <textarea
+              className="mt-2 w-full min-h-16 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+              value={editingStep.description}
+              onChange={(event) =>
+                setEditingStep((current) => (current ? { ...current, description: event.target.value } : null))
+              }
+            />
+            <textarea
+              className="mt-2 w-full min-h-24 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+              value={editingStep.llm_system_prompt}
+              onChange={(event) =>
+                setEditingStep((current) =>
+                  current ? { ...current, llm_system_prompt: event.target.value } : null
+                )
+              }
+            />
+            <textarea
+              className="mt-2 w-full min-h-24 rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+              value={editingStep.llm_user_prompt}
+              onChange={(event) =>
+                setEditingStep((current) => (current ? { ...current, llm_user_prompt: event.target.value } : null))
+              }
+            />
+            <div className="mt-2 flex gap-2">
+              <button
+                className="btn btn-primary"
+                disabled={loading}
+                onClick={() =>
+                  runMutation(async () => {
+                    await upsertStepFromForm(Number(editingStep.id), editingStep)
+                  }, `Updated step #${editingStep.id}.`)
+                }
+              >
+                Save selected step
+              </button>
+              <button className="btn" disabled={loading} onClick={() => setSelectedStepId(null)}>
+                Close editor
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {errorMessage ? (

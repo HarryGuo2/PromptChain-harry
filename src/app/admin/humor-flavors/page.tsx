@@ -40,9 +40,9 @@ export default async function HumorFlavorsPage() {
   return (
     <main className="container space-y-4">
       <div className="card">
-        <h1 className="text-2xl font-bold">Humor Flavors + Steps</h1>
+        <h1 className="text-2xl font-bold">Flavor Builder</h1>
         <p className="text-slate-600 mt-1">
-          Create, update, delete, and reorder flavors/steps.
+          Create and edit humor flavors and their ordered prompt-chain steps.
         </p>
       </div>
 
