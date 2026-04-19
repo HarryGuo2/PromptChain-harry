@@ -84,6 +84,24 @@ function toStepForm(step: StepRow): StepFormState {
   }
 }
 
+function getUniqueFlavorSlug(baseSlug: string, existingSlugs: string[]) {
+  const normalizedExisting = new Set(existingSlugs.map((slug) => slug.toLowerCase()))
+  const cleanBase = baseSlug.trim() || 'flavor-copy'
+
+  if (!normalizedExisting.has(cleanBase.toLowerCase())) {
+    return cleanBase
+  }
+
+  let index = 2
+  while (true) {
+    const candidate = `${cleanBase}-${index}`
+    if (!normalizedExisting.has(candidate.toLowerCase())) {
+      return candidate
+    }
+    index += 1
+  }
+}
+
 export function HumorFlavorsAdmin({
   initialFlavors,
   initialSteps,
@@ -364,6 +382,57 @@ export function HumorFlavorsAdmin({
                 }
               >
                 Save selected flavor
+              </button>
+              <button
+                className="btn"
+                disabled={loading}
+                onClick={() =>
+                  runMutation(async () => {
+                    const baseSlug = `${selectedFlavor.slug}-copy`
+                    const newSlug = getUniqueFlavorSlug(
+                      baseSlug,
+                      flavors.map((flavor) => flavor.slug)
+                    )
+
+                    const createFlavorResult = await supabase
+                      .from('humor_flavors')
+                      .insert({
+                        slug: newSlug,
+                        description: selectedFlavor.description ?? null,
+                      })
+                      .select('id')
+                      .single()
+                    if (createFlavorResult.error) throw new Error(createFlavorResult.error.message)
+
+                    const newFlavorId = Number(createFlavorResult.data.id)
+                    const stepsToClone = selectedFlavorSteps
+                      .slice()
+                      .sort((a, b) => a.order_by - b.order_by)
+                      .map((step) => ({
+                        humor_flavor_id: newFlavorId,
+                        order_by: step.order_by,
+                        llm_model_id: step.llm_model_id,
+                        llm_input_type_id: step.llm_input_type_id,
+                        llm_output_type_id: step.llm_output_type_id,
+                        humor_flavor_step_type_id: step.humor_flavor_step_type_id,
+                        llm_temperature: step.llm_temperature,
+                        description: step.description,
+                        llm_system_prompt: step.llm_system_prompt,
+                        llm_user_prompt: step.llm_user_prompt,
+                      }))
+
+                    if (stepsToClone.length > 0) {
+                      const createStepsResult = await supabase.from('humor_flavor_steps').insert(stepsToClone)
+                      if (createStepsResult.error) throw new Error(createStepsResult.error.message)
+                    }
+
+                    setSelectedFlavorId(newFlavorId)
+                    setSelectedStepId(null)
+                    setFlavorSearch('')
+                  }, `Duplicated flavor #${selectedFlavor.id} with all steps.`)
+                }
+              >
+                Duplicate selected flavor
               </button>
               <button
                 className="btn"
