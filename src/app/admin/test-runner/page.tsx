@@ -8,10 +8,21 @@ export default async function TestRunnerPage() {
     .from('humor_flavors')
     .select('id, slug')
     .order('slug', { ascending: true })
+    .limit(50000)
 
-  const { data: flavorSteps } = await supabase
-    .from('humor_flavor_steps')
-    .select('humor_flavor_id')
+  const flavorIds = (flavors ?? []).map((f) => f.id)
+
+  // Scope step lookup to the visible flavor ids and set an explicit
+  // ceiling so PostgREST's default ~1000-row cap can't silently truncate
+  // step counts for the newest flavors.
+  const { data: flavorSteps } =
+    flavorIds.length > 0
+      ? await supabase
+          .from('humor_flavor_steps')
+          .select('humor_flavor_id')
+          .in('humor_flavor_id', flavorIds)
+          .limit(50000)
+      : { data: [] as { humor_flavor_id: number }[] }
 
   const flavorStepCountByFlavorId = (flavorSteps || []).reduce<Record<number, number>>((acc, row) => {
     const flavorId = Number(row.humor_flavor_id)

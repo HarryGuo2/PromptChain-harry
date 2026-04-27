@@ -40,7 +40,11 @@ export default async function CaptionsPage({ searchParams }: { searchParams?: Se
 
   const [{ data: captions, count }, { data: flavors }] = await Promise.all([
     captionsQuery,
-    supabase.from('humor_flavors').select('id, slug').order('slug', { ascending: true }),
+    supabase
+      .from('humor_flavors')
+      .select('id, slug')
+      .order('slug', { ascending: true })
+      .limit(50000),
   ])
 
   const totalCount = count ?? 0
