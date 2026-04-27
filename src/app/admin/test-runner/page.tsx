@@ -1,6 +1,31 @@
 import { requireAdminUser } from '@/lib/admin-auth'
 import { TestRunnerForm } from '@/components/test-runner-form'
 
+const STEP_PAGE_SIZE = 1000
+
+// Supabase enforces a hard ~1000-row cap per request, so we page through
+// the steps table with explicit `.range()` calls until drained instead of
+// relying on a single `.limit(N)` to return all rows.
+async function fetchAllStepFlavorIds(
+  supabase: Awaited<ReturnType<typeof requireAdminUser>>['supabase']
+): Promise<{ humor_flavor_id: number }[]> {
+  const all: { humor_flavor_id: number }[] = []
+  let from = 0
+  while (true) {
+    const to = from + STEP_PAGE_SIZE - 1
+    const { data, error } = await supabase
+      .from('humor_flavor_steps')
+      .select('humor_flavor_id')
+      .range(from, to)
+    if (error) throw new Error(error.message)
+    if (!data || data.length === 0) break
+    all.push(...(data as { humor_flavor_id: number }[]))
+    if (data.length < STEP_PAGE_SIZE) break
+    from += STEP_PAGE_SIZE
+  }
+  return all
+}
+
 export default async function TestRunnerPage() {
   const { supabase } = await requireAdminUser()
 
@@ -8,23 +33,10 @@ export default async function TestRunnerPage() {
     .from('humor_flavors')
     .select('id, slug')
     .order('slug', { ascending: true })
-    .limit(50000)
 
-  const flavorIds = (flavors ?? []).map((f) => f.id)
+  const flavorSteps = await fetchAllStepFlavorIds(supabase)
 
-  // Scope step lookup to the visible flavor ids and set an explicit
-  // ceiling so PostgREST's default ~1000-row cap can't silently truncate
-  // step counts for the newest flavors.
-  const { data: flavorSteps } =
-    flavorIds.length > 0
-      ? await supabase
-          .from('humor_flavor_steps')
-          .select('humor_flavor_id')
-          .in('humor_flavor_id', flavorIds)
-          .limit(50000)
-      : { data: [] as { humor_flavor_id: number }[] }
-
-  const flavorStepCountByFlavorId = (flavorSteps || []).reduce<Record<number, number>>((acc, row) => {
+  const flavorStepCountByFlavorId = flavorSteps.reduce<Record<number, number>>((acc, row) => {
     const flavorId = Number(row.humor_flavor_id)
     acc[flavorId] = (acc[flavorId] || 0) + 1
     return acc
